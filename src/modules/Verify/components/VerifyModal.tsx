@@ -114,16 +114,20 @@ const formatDate = (dateInput: any) => {
                           ? 'bg-[#FDECEA] border-[#F25F5C] hover:bg-[#FAD7D4]' 
                           : 'bg-white border-gray-200 hover:bg-gray-50'}`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className={`text-[11px] font-bold uppercase truncate
-                        ${isUntrusted ? 'text-[#F25F5C]' : 'text-gray-700'}`}>
-                        {sig["SubjectDN"]?.split(',').find((s: any) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() || "Signature " + (index + 1)}
-                      </span>
+                    <div className="flex items-center justify-between w-full gap-2"> {/* Tambahkan gap-2 */}
+                    <span className={`text-[11px] font-bold uppercase truncate flex-1 
+                      ${isUntrusted ? 'text-[#F25F5C]' : 'text-gray-700'}`}>
+                      {/* Logika Ringkas & Aman dari Eror Regexp */}
+                      {(sig["SubjectDN"]?.includes('CN=') 
+                          ? sig["SubjectDN"].split('CN=')[1].split(',')[0] 
+                          : (sig["Signer "] || sig["Signer"] || "Signature " + (index + 1))
+                      )}
+                    </span>
                         
-                    {/* Badge Status */}
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold text-white
-                      ${isUntrusted ? 'bg-[#F25F5C]' : 'bg-[#00A884]'}`}>
-                      {isUntrusted ? "Signature " + (index + 1) : "Signature " + (index + 1)}
+                    {/* Badge Status - Ubah rounded menjadi rounded-full */}
+                    <span className={`text-[9px] px-3 py-0.5 rounded-full font-bold text-white whitespace-nowrap flex-shrink-0
+                      ${isUntrusted ? 'bg-[#F25F5C]' : 'bg-[#48D1E0]'}`}>
+                      Signature {index + 1}
                     </span>
                   </div>
                 </button>
@@ -217,14 +221,14 @@ const formatDate = (dateInput: any) => {
                                   !activeSig?.["Issuer"]?.toLowerCase().includes("pamuji")
                           },
                           { 
-                            text: 'Tanda tangan dilengkapi penanda waktu elektronik (TSA) yang valid', 
+                            text: 'Tanda tangan tidak dilengkapi penanda waktu elektronik dari TSA berinduk', 
                             icon: <History size={18} />, 
                             // Merah jika tidak ada data timestamp yang terverifikasi
                             valid: activeSig?.["timestamp signature"]?.toLowerCase().includes("verified") || 
                                   activeSig?.["Timestamp"] !== undefined
                           },
                           { 
-                            text: 'Tanda tangan mendukung fitur validasi jangka panjang (LTV)', 
+                            text: 'Tanda tangan tidak mendukung fitur LTV', 
                             icon: <Milestone size={18} />, 
                             valid: activeSig["LTV"]?.toLowerCase().includes("support")
                           }
@@ -243,14 +247,15 @@ const formatDate = (dateInput: any) => {
                       </div>
 
                         {/* 2. Informasi Penandatangan */}
-                        <div className="flex flex-col gap-6">
-                          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm relative mt-2">
-                            <span className="absolute -top-[14px] left-4 text-white text-[10px] font-bold px-3 py-0.5 rounded shadow-sm uppercase bg-[#48D1E0]">
+                        <div className="flex flex-col gap-6 mt-6">
+                          <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm relative">
+                            {/* Tambahkan whitespace-nowrap agar angka 1 tidak turun */}
+                            <span className="absolute -top-[27px] left-4 text-white text-[10px] font-bold px-4 py-0.5 rounded-full shadow-sm bg-[#48D1E0] whitespace-nowrap">
                               Signature {selectedSignature + 1}
                             </span>
-                            <div className="grid grid-cols-[200px_1fr] gap-y-2 text-[12px] text-gray-600">
+                            <div className="grid grid-cols-[200px_1fr] gap-y-3 text-[12px] text-gray-600 pt-2">
                               <div>Pemberi Tanda Tangan</div>
-                              <div className="text-gray-800 font-bold">
+                              <div className="text-gray-800">
                                 {/* Kita tambahkan pengecekan Signer dengan spasi: "Signer " */}
                                 : {activeSig["SubjectDN"]?.split(',').find((s: any) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() || activeSig["Signer "] || activeSig["Signer"] || "-"}
                               </div>
@@ -262,13 +267,13 @@ const formatDate = (dateInput: any) => {
                               <div>: {activeSig["Location"] || activeSig["Lokasi"] || "-"}</div>
                               
                               <div>Info TSA</div>
-                              <div className="text-gray-800 font-bold">
+                              <div className="text-gray-800">
                                 {/* Mengambil data dinamis dari BE. Jika tidak ada, tampilkan strip (-) */}
                                 : {activeSig["TSA Info"] || "-"}
                               </div>
                               
                               <div>Waktu Penandatanganan</div>
-                              <div className="text-gray-800 font-bold">
+                              <div className="text-gray-800">
                                 : {(() => {
                                   // 1. Cek hasil titipan dari PdfPreview
                                   if (activeSig?.rootTimestamp) return formatDate(activeSig.rootTimestamp);
@@ -285,7 +290,7 @@ const formatDate = (dateInput: any) => {
                               </div>
 
                               <div>Stempel Waktu</div>
-                              <div className="text-gray-800 font-bold">
+                              <div className="text-gray-800">
                                 {/* 1. Kita cek apakah ada field jam dari BE (misal: "stempel_waktu")
                                     2. Jika tidak ada, tampilkan "-" agar tidak memberikan info salah ke user
                                 */}
@@ -296,43 +301,44 @@ const formatDate = (dateInput: any) => {
 
                           <div className="mt-2">
                             <h3 className="text-[14px] font-bold text-gray-700 mb-3 uppercase tracking-wide">
-                              {activeSig["SubjectDN"]?.split(',').find((s: string) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() || "DETAIL PENANDA TANGAN"}
+                              {/* Gunakan variabel bantuan agar kode tidak panjang di JSX */}
+                              {activeSig["SubjectDN"]?.split(',').find((s: string) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() 
+                                || activeSig["Signer "] 
+                                || activeSig["Signer"]
+                                || "DETAIL PENANDA TANGAN"}
                             </h3>
                             <div className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm grid grid-cols-[200px_1fr] gap-y-2 text-[12px] text-gray-600">
                             <div>Serial Number</div>
-                              <div className="font-mono">: {activeSig["Serial Number"] || activeSig["serial_number"] || activeSig["Serial"] || "-"}</div>
+                              <div>
+                                : <span className="text-gray-800">{activeSig["Serial Number"] || activeSig["serial_number"] || activeSig["Serial"] || "-"}</span>
+                              </div>
                               
                               <div>Valid Date</div>
-                              <div className="text-gray-800 font-bold">
-                                : {(() => {
-                                    const v = activeSig["Validity"] || "";
-                                    if (v.includes("From") && v.includes("To")) {
-                                      const parts = v.split(" To ");
-                                      return `${formatDate(parts[0].replace("From ", ""))} - ${formatDate(parts[1])}`;
-                                    }
+                              <div className="text-gray-800">
+                                : {(() => {const v = activeSig["Validity"] || "";
+                                  if (v.includes("From") && v.includes("To")) {const parts = v.split(" To ");
+                                    return `${formatDate(parts[0].replace("From ", ""))} - ${formatDate(parts[1])}`;
+                                  }
                                     return formatDate(v);
                                   })()}
                               </div>
                                                           
                               <div>Signature Algorithm</div>
-                              <div className="text-gray-800 font-bold">: {activeSig["Signature Algorithm"] || activeSig["signature_algorithm"] || "SHA256withRSA"}</div>
+                              <div className="text-gray-800">: {activeSig["Signature Algorithm"] || activeSig["signature_algorithm"] || "SHA256withRSA"}</div>
                               
                               <div>Common Name (CN)</div>
-                              <div className="text-gray-800 font-bold">: {activeSig["SubjectDN"]?.split(',').find((s: string) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() || activeSig["Signer"] || "-"}</div>
+                              <div className="text-gray-800">: {activeSig["SubjectDN"]?.split(',').find((s: string) => s.trim().startsWith('CN='))?.replace('CN=', '').trim() || activeSig["Signer"] || "-"}</div>
                               
                               {/* Menggunakan reverseDN agar urutan C=ID, O=... dst (Seperti Komdigi) */}
                               <div>Issuer Distinguished Name</div>
-                              <div className="text-[11px]">: {reverseDN(activeSig["Issuer Distinguished Name"] || activeSig["Issuer"] || activeSig["issuer_dn"])}</div>
+                              <div className="text-gray-800">: {reverseDN(activeSig["Issuer Distinguished Name"] || activeSig["Issuer"] || activeSig["issuer_dn"])}</div>
                               
                               <div>Subject Distinguished Name</div>
-                              <div className="text-[11px]">: {reverseDN(activeSig["SubjectDN"] || activeSig["subject_dn"])}</div>
+                                <div className="text-gray-800 flex gap-1"><span className="flex-shrink-0">:</span><span className="break-all">{activeSig["SubjectDN"] || "-"}</span></div>
                               
                               {/* Menambah field 'sha1' atau 'fingerprint_sha1' agar tidak null */}
                               <div>SHA-1 Fingerprint</div>
-                              <div className="font-mono text-[11px] break-all">
-                                {/* Tambahkan 'sha1' ke daftar pencarian karena API sering pakai huruf kecil */}
-                                : {getField(["SHA-1 Fingerprint", "sha1", "fingerprint"])}
-                              </div>
+                              <div className="font-mono text-[11px] break-all text-gray-800">: {getField(["SHA-1 Fingerprint", "sha1", "fingerprint"])}</div>
                           </div>
                           </div>
                         </div>
