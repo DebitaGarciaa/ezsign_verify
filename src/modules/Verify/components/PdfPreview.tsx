@@ -44,15 +44,38 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
     const url = URL.createObjectURL(file);
     setPdfUrl(url);
 
-  const getPdfInfo = async () => {
-    try {
-      const res = await verifyDocument(file); 
-      setApiData(res || []); 
+    const getPdfInfo = async () => {
+  try {
+    const res = await verifyDocument(file);
+    
+    // 1. Ambil jamnya DULU (Sangat penting urutan ini!)
+    const serverTime = res?.timestamp || null; 
 
-      if (res && res.length > 0) {
-        let tempFinalStatus: VerifyStatus = 'valid_ideal';
+    // 2. Tentukan datanya DULU
+    const dataLoop = res?.data || (Array.isArray(res) ? res : []);
 
-        for (const sig of res) {
+    // 3. Baru masuk ke kondisi pengecekan
+    if (dataLoop && dataLoop.length > 0) {
+      // 1. Ambil jam dari level luar JSON
+      
+      const jamServer = res?.timestamp || res?.data?.timestamp || (res as any)?.raw?.timestamp || null;
+
+      console.log("RE-CHECK RES OBJECT:", res); // Cek isi asli 'res' biar ketahuan sembunyi di mana
+      console.log("ISI JAM SERVER SEKARANG:", jamServer);
+      console.log("CEK STRUKTUR API:", Object.keys(res))
+
+      // 2. Buat array baru yang SUDAH ADA JAMNYA di setiap baris
+      const dataBaru = dataLoop.map((sig: any) => ({
+        ...sig,
+        rootTimestamp: jamServer 
+      }));
+
+      setApiData([...dataBaru]);
+
+      let tempFinalStatus: VerifyStatus = 'valid_ideal';
+      
+      // Logika BOOM! tetap pakai data yang sudah kita perkaya tadi
+      for (const sig of dataBaru) {
         const certStatus = (sig["Certificate Status"] || "").toLowerCase();
         const issuer = (sig["Issuer"] || sig["issuer"] || "").toLowerCase();
         const sigStatus = (sig["Signature"] || "").toLowerCase();
@@ -60,10 +83,8 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
         const serial = (sig["Serial Number"] || "").toString().toLowerCase();
 
         const isUntrusted = 
-          // Pakai == (dua sama dengan) agar "1003" atau 1003 tetap kena merah
             sig.code == 1003 || 
             sig.code == "1003" ||
-            // Tambahkan sensor email ini agar banner luar jadi MERAH
             issuer.includes("pamuji@solomon") || 
             issuer.trim() === "" || 
             issuer === "-" ||
@@ -74,32 +95,33 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
         const isInvalid = sigStatus.includes("invalid") || hashStatus.includes("invalid");
 
         if (isUntrusted || isInvalid) {
-          console.log("BOOM! KONDISI MERAH LOCK!");
           tempFinalStatus = 'untrusted';
-          break; // Berhenti seketika!
+          break; 
         }
       }
-
-      // BARU SET STATE SEKALI SAJA DI SINI
-      console.log("HASIL AKHIR UNTUK UI:", tempFinalStatus);
-      setCurrentStatus(tempFinalStatus); 
+      setCurrentStatus(tempFinalStatus); // Ini yang menjaga warna Hijau/Merah
 
     } else {
-      setCurrentStatus('no_signature'); 
-    }
-      // Load PDF viewer tetap di bawah sini...
-      const pdfjs = await import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      setNumPages(pdf.numPages);
-
-    } catch (error) {
-      console.error("Error verify:", error);
+      // Hanya masuk sini kalau dokumen BENAR-BENAR kosong
       setCurrentStatus('no_signature');
-    }
-  };
+      setApiData([]);
+    } 
+
+        // Load PDF viewer tetap di bawah sini...
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        setNumPages(pdf.numPages);
+
+      } catch (error) {
+        console.error("Error verify:", error);
+        // JANGAN set ke 'no_signature' di sini jika itu error server
+        // Lebih baik tampilkan status error agar user tahu server sedang bermasalah
+        setCurrentStatus('loading'); 
+      }
+    };
 
     getPdfInfo();
     return () => URL.revokeObjectURL(url);
