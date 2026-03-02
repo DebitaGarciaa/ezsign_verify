@@ -114,10 +114,13 @@ export const VerifyModal = ({ isOpen, onClose, lang, apiData }: VerifyModalProps
 
                   const activeSigExpired = activeSig["Validity"]?.toLowerCase().includes("expired");
                   const activeSigHashInvalid = activeSig["File hash Validation"]?.toLowerCase().includes("invalid");
+                  const isPasswordProtected = activeSig?.["Error Undefined"]?.toLowerCase().includes("password") || 
+                             activeSig?.["message"]?.toLowerCase().includes("password");
 
                   const hasIssue = activeSigUntrusted || 
                   activeSig["Validity"]?.toLowerCase().includes("expired") || 
-                  activeSig["File hash Validation"]?.toLowerCase().includes("invalid");
+                  activeSig["File hash Validation"]?.toLowerCase().includes("invalid") || 
+                  isPasswordProtected;
 
                   return hasIssue ? (
                     /* --- KONDISI 2: TAMPILAN BANNER MERAH (UNTRUSTED) --- */
@@ -138,8 +141,13 @@ export const VerifyModal = ({ isOpen, onClose, lang, apiData }: VerifyModalProps
                           </div>
                         </div>
                         <div className="px-4">
-                          <p className="text-[15px] leading-relaxed font-medium italic opacity-95">
-                            {t.legal_basis}
+                          <p className="text-[15px] leading-relaxed font-bold uppercase mb-2">
+                            {isPasswordProtected ? "Dokumen Terkunci" : "Tanda Tangan Tidak Terpercaya"}
+                          </p>
+                          <p className="text-[14px] leading-relaxed opacity-95">
+                            {isPasswordProtected 
+                              ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password." 
+                              : t.legal_basis}
                           </p>
                         </div>
                       </div>
