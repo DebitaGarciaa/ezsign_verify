@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { X } from "lucide-react";
 import { translations } from "@/constants/translations";
+import { verifyDocument } from "@/services/verifyService"; //
 
 export interface VerificationResult {
   status: 'no_signature' | 'untrusted' | 'valid';
@@ -50,17 +51,19 @@ export const Dropzone = ({ onUploadSuccess }: DropzoneProps) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
       try {
+        // 1. Tambahkan loading atau proses PDF jika perlu
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
         const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true });
+        await pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true }).promise;
         
         // Menunggu metadata PDF dimuat untuk cek password
-        await loadingTask.promise;
+        const result = await verifyDocument(file);
 
         // JIKA LOLOS (Tidak ada password): Kirim dummy Kondisi 1
-        onUploadSuccess(file, { status: 'no_signature', signatures: [] });
+        console.log("CEK RESULT ASLI DARI API:", result);
+
+        onUploadSuccess(file, result as any);
 
       } catch (error: any) {
         // 2. DETEKSI PASSWORD
