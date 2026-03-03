@@ -205,13 +205,17 @@ const formatDate = (dateInput: any) => {
                       <div className="h-full flex-1 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
                         <div className="bg-[#F25F5C] text-white p-10 rounded-xl flex flex-col items-center text-center shadow-lg w-full max-w-[720px]">
                           <div className="mb-8">
-                            <div className="relative inline-block">
-                              <div className="bg-white/20 p-7 rounded-3xl backdrop-blur-sm">
-                                <div className="relative">
-                                  <FileText size={85} strokeWidth={1.5} />
-                                  <div className="absolute inset-0 flex items-center justify-center mt-2">
-                                    <div className="bg-white rounded-full p-0.5">
-                                      <XCircle size={32} className="text-[#F25F5C]" fill="currentColor" />
+                                <div className="relative inline-block bg-white/10 p-10 rounded-[40px] backdrop-blur-md border border-white/20 shadow-inner">
+                                  <div className="relative">
+                                    {/* 1. Ikon Dokumen Utama */}
+                                    <FileText size={100} strokeWidth={1} className="opacity-90" />
+                                    
+                                    {/* 2. Ikon Silang (X) yang Benar */}
+                                    <div className="absolute -left-4 -bottom-4">
+                                      <div className="bg-white rounded-full p-1 shadow-xl">
+                                        {/* Hapus fill="currentColor" agar tanda X putih di tengahnya muncul */}
+                                        <div className="bg-[#F25F5C] rounded-full p-1.5 flex items-center justify-center">
+                                          <X size={28} className="text-white" strokeWidth={3} />
                                     </div>
                                   </div>
                                 </div>
