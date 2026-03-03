@@ -40,70 +40,59 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
     }
   }[lang];
 
-  useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setPdfUrl(url);
+  // PdfPreview.tsx
+useEffect(() => {
+  const url = URL.createObjectURL(file);
+  setPdfUrl(url);
 
-  const getPdfInfo = async () => {
-    try {
-      const res = await verifyDocument(file); 
-      setApiData(res || []); 
+  // JANGAN PANGGIL verifyDocument LAGI DI SINI!
+  // Cukup gunakan props apiData yang sudah kita oper dari index.tsx
+ // PdfPreview.tsx - Di dalam useEffect
+// Di PdfPreview.tsx - Ganti blok if (initialApiData...)
+if (initialApiData && initialApiData.length > 0) {
+  console.log("DATA MASUK KE PREVIEW:", initialApiData); // CEK DI F12!
+  
+  let tempFinalStatus: VerifyStatus = 'valid_ideal';
 
-      if (res && res.length > 0) {
-        let tempFinalStatus: VerifyStatus = 'valid_ideal';
+  for (const sig of initialApiData) {
+    // Ambil status dengan sangat hati-hati (cek semua kemungkinan nama field)
+    const certStatus = (sig["Certificate Status"] || sig["certificate_status"] || "").toLowerCase();
+    const issuer = (sig["Issuer"] || sig["issuer"] || "").toLowerCase();
+    
+    // LOGIKA PENENTU WARNA:
+    // Jika ada kata 'untrusted' atau 'invalid', langsung MERAH
+    const isUntrusted = 
+      certStatus.includes("untrusted") || 
+      certStatus.includes("invalid") ||
+      issuer.includes("pamuji@solomon");
 
-        for (const sig of res) {
-        const certStatus = (sig["Certificate Status"] || "").toLowerCase();
-        const issuer = (sig["Issuer"] || sig["issuer"] || "").toLowerCase();
-        const sigStatus = (sig["Signature"] || "").toLowerCase();
-        const hashStatus = (sig["File hash Validation"] || "").toLowerCase();
-        const serial = (sig["Serial Number"] || "").toString().toLowerCase();
-
-        const isUntrusted = 
-          // Pakai == (dua sama dengan) agar "1003" atau 1003 tetap kena merah
-            sig.code == 1003 || 
-            sig.code == "1003" ||
-            // Tambahkan sensor email ini agar banner luar jadi MERAH
-            issuer.includes("pamuji@solomon") || 
-            issuer.trim() === "" || 
-            issuer === "-" ||
-            serial === "" || 
-            serial === "-" ||
-            certStatus.includes("untrusted");
-
-        const isInvalid = sigStatus.includes("invalid") || hashStatus.includes("invalid");
-
-        if (isUntrusted || isInvalid) {
-          console.log("BOOM! KONDISI MERAH LOCK!");
-          tempFinalStatus = 'untrusted';
-          break; // Berhenti seketika!
-        }
-      }
-
-      // BARU SET STATE SEKALI SAJA DI SINI
-      console.log("HASIL AKHIR UNTUK UI:", tempFinalStatus);
-      setCurrentStatus(tempFinalStatus); 
-
-    } else {
-      setCurrentStatus('no_signature'); 
+    if (isUntrusted) {
+      tempFinalStatus = 'untrusted';
+      break;
     }
-      // Load PDF viewer tetap di bawah sini...
-      const pdfjs = await import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      setNumPages(pdf.numPages);
+  }
 
-    } catch (error) {
-      console.error("Error verify:", error);
-      setCurrentStatus('no_signature');
-    }
+  // PAKSA PERUBAHAN STATUS
+  console.log("STATUS AKHIR DISESUAIKAN KE:", tempFinalStatus);
+  setCurrentStatus(tempFinalStatus);
+  setApiData(initialApiData);
+} else {
+  console.log("DATA KOSONG, TETAP BIRU");
+  setCurrentStatus('no_signature');
+}
+  // Load PDF viewer saja
+  const loadPdf = async () => {
+    const pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    setNumPages(pdf.numPages);
   };
+  loadPdf();
 
-    getPdfInfo();
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+  return () => URL.revokeObjectURL(url);
+}, [file, initialApiData.length]);
 
   const scrollToPage = (pageIndex: number) => {
     setActivePage(pageIndex);

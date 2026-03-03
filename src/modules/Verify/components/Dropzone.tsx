@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { X } from "lucide-react";
 import { translations } from "@/constants/translations";
-import { verifyDocument } from "@/services/verifyService";
+import { verifyDocument } from "@/services/verifyService"; //
 
 export interface VerificationResult {
   status: 'no_signature' | 'untrusted' | 'valid';
@@ -37,62 +37,53 @@ export const Dropzone = ({
   const t = translations[lang];
 
   const onDrop = useCallback(async (acceptedFiles: File[], fileRejections: any[]) => {
+  setErrorMessage(null);
 
-      setErrorMessage(null);
+  // 1. Cek Penolakan Otomatis dari Dropzone
+  if (fileRejections.length > 0) {
+    const error = fileRejections[0].errors[0];
+    if (error.code === "file-invalid-type") {
+      setErrorMessage(lang === 'id' ? "Dokumen yang anda unggah tidak diperbolehkan" : "The document you uploaded is not allowed");
+    } else if (error.code === "file-too-large") {
+      setErrorMessage(lang === 'id' ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
+    }
+    return;
+  }
 
-      if (fileRejections.length > 0) {
-        const error = fileRejections[0].errors[0];
-        
-        if (error.code === "file-invalid-type") {
-          setErrorMessage(lang === 'id' 
-            ? "Dokumen yang anda unggah tidak diperbolehkan" 
-            : "The document you uploaded is not allowed");
-        } else if (error.code === "file-too-large") {
-          setErrorMessage(lang === 'id' 
-            ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." 
-            : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
-        }
-        return;
-      }
+  if (acceptedFiles.length > 0) {
+    const file = acceptedFiles[0];
 
-      if (acceptedFiles.length > 0) {
-        const file = acceptedFiles[0];
+    // 2. Cek Manual Tipe PDF
+    if (file.type !== 'application/pdf') {
+      setErrorMessage(lang === 'id' ? "Dokumen yang anda unggah tidak diperbolehkan" : "The document you uploaded is not allowed");
+      return;
+    }
 
-      // CEK MANUAL UNTUK FILE NON-PDF (Misal: Sheets/Excel)
-      if (file.type !== 'application/pdf') {
-        setErrorMessage(lang === 'id' 
-          ? "Dokumen yang anda unggah tidak diperbolehkan" 
-          : "The document you uploaded is not allowed");
-        return;
-      }
+    // 3. Cek Manual Ukuran 15MB
+    const MAX_SIZE = 15 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setErrorMessage(lang === 'id' ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
+      return;
+    }
 
-      // 2. TAMBAHKAN INI: CEK MANUAL UKURAN (Penyebab Masalahmu)
-      const MAX_SIZE = 15 * 1024 * 1024; // 15MB dalam bytes
-      if (file.size > MAX_SIZE) {
-        setErrorMessage(lang === 'id' 
-          ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." 
-          : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
-        return; // Berhenti di sini, jangan lanjut ke proses upload!
-      }
-
-      try {
+    try {
+      // 4. Proses PDF untuk cek Metadata/Password
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true });
+      await pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true }).promise;
       
-      await loadingTask.promise; // Cek Metadata
-
-      // Jika Lolos: Panggil fungsi upload asli (Kondisi 1-4)
+      // 5. Jika lolos (bukan password), Panggil API Jasuindo
       const result = await verifyDocument(file);
-      onUploadSuccess(file, result);
+      console.log("CEK RESULT ASLI DARI API:", result);
 
-      } catch (error: any) {
-        // KONDISI 3: DOKUMEN BERPASSWORD
+      // Kirim hasil ke index.tsx (Untuk Kondisi 1-4)
+      onUploadSuccess(file, result as any);
+
+    } catch (error: any) {
+      // 6. Penanganan Error Password
       if (error.name === "PasswordException") {
-        setErrorMessage(lang === 'id'
-          ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password"
-          : "The document cannot be opened because it is password protected.");
+        setErrorMessage(lang === 'id' ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password" : "The document cannot be opened because it is password protected.");
         return;
       } 
       setErrorMessage(lang === 'id' ? "Gagal memproses dokumen." : "Failed to process document.");
