@@ -1,9 +1,11 @@
+
 // src/modules/Verify/components/Dropzone.tsx
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { X } from "lucide-react";
 import { translations } from "@/constants/translations";
+import { verifyDocument } from "@/services/verifyService";
 
 export interface VerificationResult {
   status: 'no_signature' | 'untrusted' | 'valid';
@@ -27,56 +29,96 @@ interface DropzoneProps {
 export const Dropzone = ({ 
   onUploadSuccess, 
   onUploadError, 
-  errorMessage, 
   lang, 
   setLang 
 }: DropzoneProps) => {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-  
-  // --- PERBAIKAN: Definisikan variabel 't' di sini agar tidak error ---
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const t = translations[lang];
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
+  const onDrop = useCallback(async (acceptedFiles: File[], fileRejections: any[]) => {
 
-      // 1. CEK UKURAN 15MB
-      if (file.size > 15 * 1024 * 1024) {
-        onUploadError(lang === 'id' 
-          ? "Ukuran dokumen melebihi batas maksimal 15 MB." 
-          : "Document size exceeds the maximum limit of 15 MB.");
+      setErrorMessage(null);
+
+      if (fileRejections.length > 0) {
+        const error = fileRejections[0].errors[0];
+        
+        if (error.code === "file-invalid-type") {
+          setErrorMessage(lang === 'id' 
+            ? "Dokumen yang anda unggah tidak diperbolehkan" 
+            : "The document you uploaded is not allowed");
+        } else if (error.code === "file-too-large") {
+          setErrorMessage(lang === 'id' 
+            ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." 
+            : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
+        }
         return;
       }
 
-      // 2. CEK TIPE FILE
-      if (file.type !== "application/pdf") {
-        onUploadError(lang === 'id' 
-          ? "Dokumen yang anda unggah tidak diperbolehkan." 
-          : "The document you uploaded is not allowed.");
+      if (acceptedFiles.length > 0) {
+        const file = acceptedFiles[0];
+
+      // CEK MANUAL UNTUK FILE NON-PDF (Misal: Sheets/Excel)
+      if (file.type !== 'application/pdf') {
+        setErrorMessage(lang === 'id' 
+          ? "Dokumen yang anda unggah tidak diperbolehkan" 
+          : "The document you uploaded is not allowed");
         return;
+      }
+
+      // 2. TAMBAHKAN INI: CEK MANUAL UKURAN (Penyebab Masalahmu)
+      const MAX_SIZE = 15 * 1024 * 1024; // 15MB dalam bytes
+      if (file.size > MAX_SIZE) {
+        setErrorMessage(lang === 'id' 
+          ? "Format dokumen tidak didukung. Silakan unggah file PDF dengan ukuran maksimal 15 MB." 
+          : "The document format is not supported. Please upload a PDF file with a maximum size of 15 MB.");
+        return; // Berhenti di sini, jangan lanjut ke proses upload!
       }
 
       try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true });
+      
+      await loadingTask.promise; // Cek Metadata
 
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjs.getDocument({ data: arrayBuffer, useSystemFonts: true });
-        await loadingTask.promise;
-
-        onUploadSuccess(file, { status: 'no_signature', signatures: [] });
+      // Jika Lolos: Panggil fungsi upload asli (Kondisi 1-4)
+      const result = await verifyDocument(file);
+      onUploadSuccess(file, result);
 
       } catch (error: any) {
-        if (error.name === "PasswordException") {
-          onUploadError(lang === 'id'
-            ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password"
-            : "The document cannot be opened because it has a password");
-        } else {
-          onUploadError(lang === 'id' ? "Gagal memproses dokumen." : "Failed to process document.");
-        }
-      }
+        // KONDISI 3: DOKUMEN BERPASSWORD
+      if (error.name === "PasswordException") {
+        setErrorMessage(lang === 'id'
+          ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password"
+          : "The document cannot be opened because it is password protected.");
+        return;
+      } 
+      setErrorMessage(lang === 'id' ? "Gagal memproses dokumen." : "Failed to process document.");
     }
-  }, [onUploadSuccess, onUploadError, lang]);
+  }
+}, [onUploadSuccess, lang]);
+
+  const getTranslatedError = () => {
+    if (!errorMessage) return "";
+
+    // Logika pengecekan kata kunci (Sesuai kode punyamu)
+    const isPassword = errorMessage.includes("password");
+    const isSize = errorMessage.includes("maksimal") || errorMessage.includes("exceeds") || errorMessage.includes("15 MB");
+    const isAllowed = errorMessage.includes("allowed") || errorMessage.includes("diperbolehkan") || errorMessage.includes("format");
+
+    if (lang === 'id') {
+      if (isPassword) return "Dokumen tidak dapat dibuka karena dokumen ini memiliki password";
+      if (isSize) return "Ukuran dokumen melebihi batas maksimal 15 MB.";
+      if (isAllowed) return "Dokumen yang anda unggah tidak diperbolehkan.";
+      return errorMessage;
+    } else {
+      if (isPassword) return "The document cannot be opened because it has a password";
+      if (isSize) return "Document size exceeds the maximum limit of 15 MB.";
+      return "The document you uploaded is not allowed.";
+    }
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
   onDrop,
@@ -132,30 +174,11 @@ export const Dropzone = ({
         {/* Error Message Section - Sudah mencakup semua kondisi (Password, 15MB, Format) */}
         {errorMessage && (
           <p className="text-[#F25F5C] text-[13px] mt-4 font-medium text-left animate-in fade-in duration-300">
-            {lang === 'id' 
-              ? (
-                  // --- LOGIKA BAHASA INDONESIA (ID) ---
-                  errorMessage.includes("password") 
-                    ? "Dokumen tidak dapat dibuka karena dokumen ini memiliki password" 
-                    : errorMessage.includes("maksimal") || errorMessage.includes("exceeds") || errorMessage.includes("15 MB")
-                      ? "Ukuran dokumen melebihi batas maksimal 15 MB."
-                      : errorMessage.includes("allowed") || errorMessage.includes("diperbolehkan") || errorMessage.includes("format")
-                        ? "Dokumen yang anda unggah tidak diperbolehkan."
-                        : errorMessage // Cadangan jika ada error lain
-                )
-              : (
-                  // --- LOGIKA BAHASA INGGRIS (EN) ---
-                  errorMessage.includes("password") 
-                    ? "The document cannot be opened because it has a password" 
-                    : errorMessage.includes("maksimal") || errorMessage.includes("exceeds") || errorMessage.includes("15 MB")
-                      ? "Document size exceeds the maximum limit of 15 MB."
-                      : "The document you uploaded is not allowed."
-                )
-            }
+            {getTranslatedError()}
           </p>
         )}
 
-        {/* 3. Tombol Panduan (Trigger Pop-up) */}
+        {/* 2. Tombol Panduan (Tetap seperti aslinya) */}
         <div className="mt-4">
           <button 
             onClick={() => setIsGuideOpen(true)}
