@@ -122,19 +122,32 @@ export const Dropzone = ({
       <div className="w-full max-w-[1000px] bg-white rounded-md shadow-[0_15px_30px_-5px_rgba(0,0,0,0.07)] pt-4 pb-10 px-10 flex flex-col items-start border border-gray-100/50">
 
         {/* 1. Header Section dengan Switcher */}
-        <div className="mb-6 w-full flex justify-between items-start">
-          <div className="text-left">
-            <div className="mb-1 flex items-center gap-0">
-              <Image src="/LogoSign.png" alt="ezSign Icon" width={42} height={42} priority className="object-contain" />
-              <span className="text-[32px] font-bold text-[#1E293B] tracking-tighter -ml-1">Sign</span>
+       <div className="mb-3.5 w-full flex justify-between items-start">
+        <div className="text-left">
+          <div className="mb-2 flex items-center gap-0">
+            {/* PASTIKAN SRC MENGARAH KE /LogoSign.png */}
+            <Image 
+              src="/LogoSign.png" 
+              alt="ezSign Icon" 
+              width={120} // Sesuaikan lebar agar tidak terlalu kecil
+              height={42} 
+              priority 
+              className="object-contain" 
+            />
+          </div>
+            <div className="text-left flex flex-col gap-[4px]"> {/* Gap 4px sesuai Figma */}
+              <h1 className="text-[16px] font-medium text-[#343A40] tracking-tight leading-[17.6px]">
+                ezSign verifyDocument
+              </h1>
+              <p className="text-[#94A3B8] text-[13px] font-normal leading-[19.5px]">
+                {lang === 'id' 
+                  ? 'Verifikasi Dokumen Tanda Tangan anda secara Digital' 
+                  : 'Verify your Signature Document Digitally'}
+              </p>
             </div>
-            <h1 className="text-[20px] font-bold text-[#334155] tracking-tight leading-[1.1]">ezSign verifyDocument</h1>
-            <p className="text-[#94A3B8] text-[13px] mt-2 font-medium leading-[1.1]">
-              {lang === 'id' ? 'Verifikasi Dokumen Tanda Tangan anda secara Digital' : 'Verify your Signature Document Digitally'}
-            </p>
           </div>
 
-          <div className="flex items-center bg-[#E8EAED] rounded-full p-0.5 h-8 w-[80px] shadow-inner relative mt-1">
+          <div className="flex items-center bg-[#E8EAED] rounded-full p-0.5 h-7 w-[80px] shadow-inner relative mt-5">
             <button onClick={() => setLang('en')} className={`flex-1 h-full text-[10px] font-bold rounded-full transition-all z-10 ${lang === 'en' ? 'bg-[#1A73E8] text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>EN</button>
             <button onClick={() => setLang('id')} className={`flex-1 h-full text-[10px] font-bold rounded-full transition-all z-10 ${lang === 'id' ? 'bg-[#1A73E8] text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>ID</button>
           </div>
@@ -152,13 +165,22 @@ export const Dropzone = ({
               <rect x="10" y="46" width="28" height="4" rx="1" fill="#F8FAFC" className="group-hover:fill-[#EDF2F7] transition-colors" />
             </svg>
           </div>
-          <p className="text-[15px] font-bold text-[#334155] leading-tight text-center">
+         <p className="text-[15px] font-bold text-[#343A40] leading-[16.5px] tracking-[0.2px] text-center">
             {isDragActive ? (lang === 'id' ? "Lepaskan file PDF di sini" : "Drop the PDF file here") : (
-              <>{lang === 'id' ? 'Tarik & Letakkan file di sini atau ' : 'Drag & Drop file here or '}<span className="text-[#38BDF8] group-hover:text-[#0EA5E9]">{lang === 'id' ? 'Pilih File' : 'Choose file'}</span></>
+              <>
+                {lang === 'id' ? 'Tarik & Letakkan file di sini atau ' : 'Drag & Drop file here or '}
+                <span className="text-[#38BDF8] group-hover:text-[#0EA5E9] font-bold"> {/* Pastikan span juga bold */}
+                  {lang === 'id' ? 'Pilih File' : 'Choose file'}
+                </span>
+              </>
             )}
           </p>
-          <p className="text-[#94A3B8] text-[14px] mt-2 font-medium leading-tight text-center">
-            {lang === 'id' ? 'Unggah Dokumen (Hanya dokumen dengan tipe PDF dan Maksimal 15 MB)' : 'Upload Document (Only PDF documents and Maximum 15 MB)'}
+
+          {/* Teks Keterangan Format & Size */}
+          <p className="text-[#94A3B8] text-[13px] mt-2 font-normal leading-[19.5px] tracking-[0.2px] text-center font-sans"> {/* Gunakan font-sans/Arial jika tersedia */}
+            {lang === 'id' 
+              ? 'Unggah Dokumen (Hanya dokumen dengan tipe PDF dan Maksimal 15 MB)' 
+              : 'Supported formats: Pdf and Maximum file size: 15MB'}
           </p>
         </div>
 
@@ -175,52 +197,98 @@ export const Dropzone = ({
             onClick={() => setIsGuideOpen(true)}
             className="flex items-stretch rounded-none overflow-hidden transition-all shadow-sm group border-none"
           >
-            <div className="bg-[#48D1E0] group-hover:bg-[#3dbcc9] text-white px-5 py-2.5 text-[13px] font-bold flex items-center">
+            <div className="bg-[#3ACCE5] hover:bg-[#2EB5CC] text-[#FFFFFF] px-[20px] py-[10px] text-[13px] font-normal font-inter flex items-center transition-colors">
               {t.guideTitle}
             </div>
-            <div className="bg-[#3BB9C7] group-hover:bg-[#35a8b4] text-white px-3 flex items-center justify-center">
+            <div className="bg-[#3BBED6] group-hover:bg-[#35a8b4] text-white px-3 flex items-center justify-center">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             </div>
           </button>
         </div>
       </div>
 
-      {/* POP-UP MODAL PANDUAN PENGGUNAAN */}
       {isGuideOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-[500px] rounded-xl shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200">
-            <div className="bg-[#48D1E0] px-6 py-4 flex justify-between items-center text-white">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                {t.guideTitle}
-              </h2>
-              <button onClick={() => setIsGuideOpen(false)} className="hover:bg-black/10 p-1 rounded-full transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              {t.steps.map((step, index) => (
-                <div key={index} className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 bg-[#48D1E0]/10 text-[#3BB9C7] rounded-full flex items-center justify-center font-bold text-sm border border-[#48D1E0]/20">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-[#334155] text-[15px]">{step.title}</h3>
-                    <p className="text-[#94A3B8] text-[13px] leading-relaxed mt-0.5">{step.desc}</p>
-                  </div>
-                </div>
-              ))}
-              <div className="mt-4 pt-4 border-t border-gray-100 italic text-[12px] text-gray-500">
-                {t.footerDesc}
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+    <div className="bg-white w-full max-w-[500px] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden relative border border-slate-100 animate-in zoom-in-95 duration-200">
+      
+      {/* 1. Header dengan Garis Biru Panjang */}
+      <div className="px-8 pt-6 pb-2 flex justify-between items-start">
+        <div className="w-full">
+          <h2 className="text-[18px] font-bold text-[#343A40] font-inter tracking-tight">
+            {lang === 'id' ? 'Panduan Penggunaan' : 'User Guide'}
+          </h2>
+          <div className="h-[3px] w-full bg-[#3ACCE5] rounded-full mt-1"></div>
+        </div>
+        <button 
+          onClick={() => setIsGuideOpen(false)} 
+          className="text-slate-400 hover:text-slate-600 p-1 rounded-full transition-all ml-4"
+        >
+          <X size={20} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* 2. Content Area: Logika Bahasa EN/ID */}
+      <div className="px-8 py-4">
+        <div className="space-y-5">
+          
+          <div className="space-y-3 text-[13.5px] text-slate-600 font-inter leading-relaxed">
+            {(lang === 'id' ? [
+              "Siapkan Dokumen",
+              "Format PDF, tidak terkunci, dan sesuai batas ukuran.",
+              "Klik Upload/Pilih File dan pilih PDF dari perangkat Anda.",
+              "Tunggu sistem memeriksa tanda tangan elektronik dan integritas dokumen.",
+              "Lihat Hasil",
+              "Cek status validasi dan informasi tanda tangan."
+            ] : [
+              "Prepare Document",
+              "PDF format, unlocked, and within size limits.",
+              "Click Upload/Choose File and select PDF from your device.",
+              "Wait for the system to check electronic signatures and document integrity.",
+              "View Results",
+              "Check validation status and signature information."
+            ]).map((text, i) => (
+              /* Menggunakan Flex agar teks yang turun ke baris baru tetap sejajar di samping nomor */
+              <div key={i} className="flex gap-3 items-start">
+                <span className="flex-shrink-0 w-4 font-bold text-slate-400">{i + 1}.</span>
+                <p className="flex-1">{text}</p>
               </div>
-            </div>
-            <div className="bg-gray-50 px-6 py-4 flex justify-end">
-              <button onClick={() => setIsGuideOpen(false)} className="bg-[#334155] hover:bg-[#1E293B] text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors">
-                {t.close}
-              </button>
+            ))}
+          </div>
+
+          {/* Section: Bantuan Lebih Lanjut */}
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <h3 className="text-[12px] font-bold uppercase tracking-[1px] text-[#3ACCE5] mb-2 font-inter">
+              {lang === 'id' ? 'Bantuan Lebih Lanjut' : 'Further Assistance'}
+            </h3>
+            <div className="space-y-2 text-[13px] text-slate-600 font-inter leading-relaxed">
+              <p>
+                {lang === 'id' 
+                  ? 'Jika anda mengalami kendala saat proses verifikasi, anda dapat mengirimkan email ke ' 
+                  : 'If you encounter issues during the verification process, you can send an email to '}
+                <a href="mailto:helpdesk@ezsign.id" className="text-[#3ACCE5] font-bold hover:underline">helpdesk@ezsign.id</a>
+              </p>
+              <p>
+                {lang === 'id'
+                  ? 'Dengan melampirkan dokumen PDF yang anda unggah dan bukti pesan error (jika ada).'
+                  : 'By attaching the PDF document you uploaded and proof of the error message (if any).'}
+              </p>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* 3. Footer */}
+      <div className="px-8 py-5 flex justify-end">
+        <button 
+          onClick={() => setIsGuideOpen(false)} 
+          className="bg-slate-700 hover:bg-slate-800 text-white px-8 py-2 rounded-lg text-[13px] font-bold transition-all shadow-md active:scale-95"
+        >
+          {lang === 'id' ? 'Tutup' : 'Close'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
