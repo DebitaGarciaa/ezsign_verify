@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Dropzone } from "./components/Dropzone";
 import { PdfPreview } from "./components/PdfPreview"; 
+import dynamic from 'next/dynamic';
 
 const VerifyModule = () => {
   // 1. PASTIKAN TIGA BARIS INI ADA (Jangan terhapus!)

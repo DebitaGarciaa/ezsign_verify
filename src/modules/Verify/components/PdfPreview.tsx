@@ -1,4 +1,6 @@
 
+'use client';
+
 // src/modules/Verify/components/PdfPreview.tsx
 import { X, ZoomIn, ZoomOut, Maximize, Scan } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
@@ -25,6 +27,13 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
   const [currentStatus, setCurrentStatus] = useState<VerifyStatus>(('loading')); //Untuk menyimpan status verifikasi yang diterima dari props
   const [apiData, setApiData] = useState<any[]>(initialApiData);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [thumbnails, setThumbnails] = useState<HTMLCanvasElement[]>([]);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
+  const renderTasksRef = useRef<Map<number, any>>(new Map()); // Track render tasks untuk cleanup
+  const thumbnailContainerRef = useRef<HTMLDivElement>(null); // Ref untuk sidebar thumbnail container
+  const canvasRefsRef = useRef<(HTMLCanvasElement | null)[]>([]);
+  const renderCycleRef = useRef(0);
 
   // Kamus terjemahan untuk banner utama
   const t = {
@@ -41,67 +50,252 @@ export const PdfPreview = ({ file, onBack, status: initialStatus = 'loading', la
   }[lang];
 
   // PdfPreview.tsx
-useEffect(() => {
-  const url = URL.createObjectURL(file);
-  setPdfUrl(url);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setPdfUrl(url);
+    let isDisposed = false;
 
-  // JANGAN PANGGIL verifyDocument LAGI DI SINI!
-  // Cukup gunakan props apiData yang sudah kita oper dari index.tsx
- // PdfPreview.tsx - Di dalam useEffect
-// Di PdfPreview.tsx - Ganti blok if (initialApiData...)
-if (initialApiData && initialApiData.length > 0) {
-  console.log("DATA MASUK KE PREVIEW:", initialApiData); // CEK DI F12!
+    if (initialApiData && initialApiData.length > 0) {
+      let tempFinalStatus: VerifyStatus = 'valid_ideal';
+
+      for (const sig of initialApiData) {
+        const issuer = (sig["Issuer"] || "").toLowerCase();
+        const serial = (sig["Serial Number"] || "").toString().toLowerCase();
+        const certStatus = (sig["Certificate Status"] || "").toLowerCase();
+        const hashValidation = (sig["File hash Validation"] || "").toLowerCase();
+
+        // 1. Logika deteksi MERAH (Untrusted)
+        const isUntrusted = 
+          sig.code == 1003 || 
+          sig.code == "1003" ||
+          issuer.includes("pamuji@solomon") || 
+          issuer.trim() === "" || 
+          serial === "" || 
+          serial === "-" ||
+          certStatus.includes("untrusted") ||
+          (sig.code == 1004 && !hashValidation.includes("annotation"));
+
+        // 2. Logika deteksi ORANGE (Hanya Anotasi)
+        const isWarning = 
+          sig.code == 1004 && (hashValidation.includes("annotation") || hashValidation.includes("freetext"));
+
+        if (isUntrusted) {
+          tempFinalStatus = 'untrusted';
+          break; 
+        } else if (isWarning) {
+          tempFinalStatus = 'untrusted'; // Banner tetap merah, detail jadi orange
+        }
+      }
+      setCurrentStatus(tempFinalStatus);
+      setApiData(initialApiData);
+    } else {
+      setCurrentStatus('no_signature');
+    }
+
+  const loadAndRenderPdf = async () => {
+    try {
+      // Dynamic import pdfjs hanya saat dibutuhkan (di browser)
+      const pdfjsLib = await import("pdfjs-dist");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      if (isDisposed) return;
+      
+      setPdfDoc(pdf);
+      setNumPages(pdf.numPages);
+      canvasRefsRef.current = Array(pdf.numPages).fill(null);
+      
+      // Generate semua thumbnails
+      const thumbArray: HTMLCanvasElement[] = [];
+      for (let i = 0; i < pdf.numPages; i++) {
+        try {
+          const page = await pdf.getPage(i + 1);
+          const viewport = page.getViewport({ scale: 0.2 });
+          
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) continue;
+          
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          const renderContext: any = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          
+          const renderTask = page.render(renderContext);
+          await renderTask.promise;
+          if (isDisposed) return;
+          
+          thumbArray.push(canvas);
+        } catch (error) {
+          console.error(`Error generating thumbnail for page ${i}:`, error);
+        }
+      }
+      if (!isDisposed) {
+        setThumbnails(thumbArray);
+      }
+      
+      // Render semua halaman akan dilakukan oleh useEffect di bawah
+    } catch (error) {
+      console.error("Error loading PDF:", error);
+    }
+  };
   
-  let tempFinalStatus: VerifyStatus = 'valid_ideal';
+  loadAndRenderPdf();
 
-  for (const sig of initialApiData) {
-    // Ambil status dengan sangat hati-hati (cek semua kemungkinan nama field)
-    const certStatus = (sig["Certificate Status"] || sig["certificate_status"] || "").toLowerCase();
-    const issuer = (sig["Issuer"] || sig["issuer"] || "").toLowerCase();
+  // Pastikan bagian return ini berada di paling akhir fungsi useEffect
+  return () => {
+    isDisposed = true;
+    renderCycleRef.current += 1;
+    renderTasksRef.current.forEach((task) => {
+      try {
+        task.cancel();
+      } catch (e) {
+        // Ignore cancel errors
+      }
+    });
+    renderTasksRef.current.clear();
+    URL.revokeObjectURL(url);
+  };
+}, [file, initialApiData]); // Tutup useEffect dengan benar
+
+  // Fungsi untuk render page ke canvas - dengan cleanup untuk mencegah "same canvas" error
+  const renderPage = async (pdf: any, pageNum: number, cycleId: number, zoomLevel: number) => {
+    try {
+      const canvasElement = canvasRefsRef.current[pageNum];
+      if (!canvasElement) {
+        console.warn(`Canvas for page ${pageNum} not found`);
+        return;
+      }
+      
+      // Cancel render task yang lama jika ada
+      const existingTask = renderTasksRef.current.get(pageNum);
+      if (existingTask) {
+        try {
+          existingTask.cancel();
+          await existingTask.promise;
+        } catch (e) {
+          // Ignore cancel errors
+        }
+        renderTasksRef.current.delete(pageNum);
+      }
+
+      if (cycleId !== renderCycleRef.current) return;
+      
+      const page = await pdf.getPage(pageNum + 1);
+      if (cycleId !== renderCycleRef.current) return;
+
+      const scale = zoomLevel / 100;
+      const viewport = page.getViewport({ scale });
+      
+      const context = canvasElement.getContext('2d');
+      if (!context) {
+        console.error(`Could not get canvas context for page ${pageNum}`);
+        return;
+      }
+      
+      canvasElement.width = viewport.width;
+      canvasElement.height = viewport.height;
+      
+      const renderContext: any = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvasElement
+      };
+      
+      const renderTask = page.render(renderContext);
+      renderTasksRef.current.set(pageNum, renderTask);
+      
+      await renderTask.promise;
+      
+      // Remove dari map setelah selesai
+      if (renderTasksRef.current.get(pageNum) === renderTask) {
+        renderTasksRef.current.delete(pageNum);
+      }
+    } catch (error: any) {
+      // Ignore error jika task di-cancel
+      if (error?.name !== 'RenderingCancelledException') {
+        console.error(`Error rendering page ${pageNum}:`, error);
+      }
+    }
+  };
+
+  // Render semua halaman saat PDF loaded atau zoom berubah - dengan cleanup
+  useEffect(() => {
+    if (pdfDoc) {
+      const cycleId = ++renderCycleRef.current;
+
+      // Cancel semua render tasks yang sedang berjalan
+      renderTasksRef.current.forEach((task) => {
+        try {
+          task.cancel();
+        } catch (e) {
+          // Ignore cancel errors
+        }
+      });
+      renderTasksRef.current.clear();
+      
+      // Render semua halaman
+      for (let i = 0; i < numPages; i++) {
+        renderPage(pdfDoc, i, cycleId, zoom);
+      }
+    }
     
-    // LOGIKA PENENTU WARNA:
-    // Jika ada kata 'untrusted' atau 'invalid', langsung MERAH
-    const isUntrusted = 
-      certStatus.includes("untrusted") || 
-      certStatus.includes("invalid") ||
-      issuer.includes("pamuji@solomon");
+    // Cleanup saat component unmount atau dependencies berubah
+    return () => {
+      renderCycleRef.current += 1;
+      renderTasksRef.current.forEach((task) => {
+        try {
+          task.cancel();
+        } catch (e) {
+          // Ignore cancel errors
+        }
+      });
+      renderTasksRef.current.clear();
+    };
+  }, [zoom, pdfDoc, numPages]);
 
-    if (isUntrusted) {
-      tempFinalStatus = 'untrusted';
-      break;
+  // Handle scroll untuk auto-detect halaman yang sedang dilihat
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!viewerRef.current || !pdfContentRef.current) return;
+      
+      const scrollTop = viewerRef.current.scrollTop;
+      const viewportHeight = viewerRef.current.clientHeight;
+      const centerPosition = scrollTop + viewportHeight / 2;
+      
+      // Hitung halaman berdasarkan posisi tengah viewport
+      const pageHeight = pdfContentRef.current.clientHeight / numPages;
+      const estimatedPage = Math.floor(centerPosition / pageHeight);
+      const newPage = Math.max(0, Math.min(estimatedPage, numPages - 1));
+      
+      if (newPage !== activePage) {
+        setActivePage(newPage);
+      }
+    };
+
+    const viewer = viewerRef.current;
+    if (viewer) {
+      viewer.addEventListener('scroll', handleScroll);
+      return () => viewer.removeEventListener('scroll', handleScroll);
     }
-  }
+  }, [activePage, numPages]);
 
-  // PAKSA PERUBAHAN STATUS
-  console.log("STATUS AKHIR DISESUAIKAN KE:", tempFinalStatus);
-  setCurrentStatus(tempFinalStatus);
-  setApiData(initialApiData);
-} else {
-  console.log("DATA KOSONG, TETAP BIRU");
-  setCurrentStatus('no_signature');
-}
-  // Load PDF viewer saja
-  const loadPdf = async () => {
-    const pdfjs = await import("pdfjs-dist");
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-    const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-    const pdf = await loadingTask.promise;
-    setNumPages(pdf.numPages);
-  };
-  loadPdf();
-
-  return () => URL.revokeObjectURL(url);
-}, [file, initialApiData.length]);
-
-  const scrollToPage = (pageIndex: number) => {
-    setActivePage(pageIndex);
-    if (viewerRef.current) {
-      const scrollHeight = viewerRef.current.scrollHeight;
-      const targetScroll = (pageIndex / numPages) * scrollHeight;
-      viewerRef.current.scrollTo({ top: targetScroll, behavior: "smooth" });
+  // Auto-scroll sidebar thumbnail saat activePage berubah
+  useEffect(() => {
+    if (thumbnailContainerRef.current && activePage >= 0) {
+      const thumbnailElement = thumbnailContainerRef.current.children[activePage] as HTMLElement;
+      if (thumbnailElement) {
+        thumbnailElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
     }
-  };
+  }, [activePage]);
 
   return (
     <div className="fixed inset-0 flex flex-col w-screen h-screen bg-[#BDC1C6] overflow-hidden font-sans z-[999]">
@@ -143,13 +337,31 @@ if (initialApiData && initialApiData.length > 0) {
       <div className="flex flex-1 w-full overflow-hidden">
         {/* 2. Sidebar Thumbnails (KIRI) */}
         <div className="w-[190px] bg-[#D1D5DB] border-r border-gray-300 flex flex-col relative shrink-0">
-          <div className="flex-1 overflow-y-auto custom-scrollbar py-6 flex flex-col items-center gap-8">
+          <div ref={thumbnailContainerRef} className="flex-1 overflow-y-auto custom-scrollbar py-6 flex flex-col items-center gap-8">
             {Array.from({ length: numPages }).map((_, index) => (
-              <div key={index} onClick={() => scrollToPage(index)} className="flex flex-col items-center cursor-pointer group">
-                <div className={`w-[110px] aspect-[1/1.41] bg-white border-2 transition-all duration-200 shadow-sm overflow-hidden relative
-                  ${activePage === index ? 'border-[#48D1E0]' : 'border-gray-300 group-hover:border-[#48D1E0]'}`}
+              <div 
+                key={index} 
+                onClick={() => {
+                  setActivePage(index);
+                  // Scroll ke halaman di main viewer
+                  if (viewerRef.current && pdfContentRef.current) {
+                    const pageHeight = pdfContentRef.current.clientHeight / numPages;
+                    viewerRef.current.scrollTop = index * pageHeight;
+                  }
+                }} 
+                className="flex flex-col items-center cursor-pointer group"
+              >
+                <div className={`w-[110px] aspect-[1/1.41] bg-white border-2 transition-all duration-200 shadow-sm overflow-hidden relative flex items-center justify-center
+                  ${activePage === index ? 'border-[#48D1E0] ring-2 ring-[#48D1E0]' : 'border-gray-300 group-hover:border-[#48D1E0]'}`}
                 >
-                  <iframe src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&page=${index + 1}`} scrolling="no" style={{ width: '400%', height: '400%', transform: 'scale(0.25)', transformOrigin: 'top left', border: 'none', pointerEvents: 'none', overflow: 'hidden' }} className="absolute top-0 left-0" />
+                  {/* Render thumbnail dari canvas */}
+                  {thumbnails[index] && (
+                    <img 
+                      src={thumbnails[index].toDataURL()} 
+                      alt={`Halaman ${index + 1}`}
+                      className="w-full h-full object-contain"
+                    />
+                  )}
                 </div>
                 <span className={`text-[11px] mt-2 font-bold ${activePage === index ? 'text-[#1A73E8]' : 'text-[#3C4043]'}`}>{index + 1}</span>
               </div>
@@ -157,7 +369,7 @@ if (initialApiData && initialApiData.length > 0) {
           </div>
         </div>
 
-        {/* 3. PDF Viewer Area (KANAN) - SEKARANG BANNER ADA DI DALAM SINI */}
+        {/* 3. PDF Viewer Area (KANAN) - CANVAS RENDERING TANPA IFRAME */}
         <div ref={viewerRef} className="flex-1 overflow-y-auto bg-[#BDC1C6] custom-scrollbar flex flex-col items-center scroll-smooth relative">
           
           {/* Banner Status - Mendeteksi Kondisi 2 (Merah) atau Kondisi 3/4 (Hijau) secara dinamis */}
@@ -187,14 +399,28 @@ if (initialApiData && initialApiData.length > 0) {
               )}
           </div>
 
-          {/* Area Konten PDF */}
-          <div className="py-8 w-full flex flex-col items-center px-4"> 
-            {pdfUrl && (
-              <div className="shadow-2xl relative overflow-hidden bg-white transition-all duration-300" 
-                   style={{ width: `${zoom}%`, maxWidth: '1200px', minWidth: '400px', aspectRatio: `1 / ${numPages * 1.41}` }}>
-                <iframe src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH&scrollbar=0`} scrolling="no" style={{ width: '100%', height: '100%', border: 'none' }} className="pointer-events-none" />
+          {/* Area Konten PDF - CANVAS MURNI TANPA WARNING - BISA SCROLL MULTIPLE PAGES */}
+          <div ref={pdfContentRef} className="py-8 w-full flex flex-col items-center px-4"> 
+            {pdfDoc && Array.from({ length: numPages }).map((_, index) => (
+              <div key={index} className="mb-8 w-full flex flex-col items-center">
+                <div 
+                  className="shadow-2xl bg-white transition-all duration-300 flex justify-center"
+                  style={{ 
+                    transformOrigin: 'top center',
+                    minHeight: '400px'
+                  }}
+                >
+                  <canvas 
+                    id={`pdf-page-${index}`}
+                    ref={(el) => {
+                      canvasRefsRef.current[index] = el;
+                    }}
+                    className="border border-gray-200"
+                  />
+                </div>
+                <div className="text-xs text-gray-500 mt-2">Halaman {index + 1}</div>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div> 

@@ -1,3 +1,4 @@
+'use client';
 
 // src/modules/Verify/components/Dropzone.tsx
 import Image from "next/image";
